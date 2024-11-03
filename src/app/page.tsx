@@ -1,100 +1,115 @@
 "use client";
-
-import Image from "next/image";
-import { ConnectButton } from "thirdweb/react";
-import thirdwebIcon from "@public/thirdweb.svg";
+import { useActiveAccount, useReadContract } from "thirdweb/react";
+import { useRouter } from "next/navigation";
+import { getContract } from "thirdweb";
 import { client } from "./client";
+import { sepolia } from "thirdweb/chains";
+import { secureDrivingRecords } from "./constants/constant";
+import { useEffect, useState } from "react";
 
 export default function Home() {
-  return (
-    <main className="p-4 pb-10 min-h-[100vh] flex items-center justify-center container max-w-screen-lg mx-auto">
-      <div className="py-20">
-        <Header />
+  const account = useActiveAccount();
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
 
-        <div className="flex justify-center mb-20">
-          <ConnectButton
-            client={client}
-            appMetadata={{
-              name: "Example App",
-              url: "https://example.com",
-            }}
-          />
-        </div>
+  const contract = getContract({
+    client: client,
+    chain: sepolia,
+    address: secureDrivingRecords,
+  })
 
-        <ThirdwebResources />
+  const { data: government } = useReadContract({
+    contract,
+    method: "function government() view returns (address)",
+    params: []
+  });
+
+  const { data: driverProfile } = useReadContract({
+    contract,
+    method: "function getDriverProfileByAddress(address _driverAddress) view returns ((string firstName, string lastName, string dateOfBirth, string gender, string contactNumber, string emailAddress, string nid, string residentialAddress, string licenseNumber, string licenseExpiryDate, string licenseType, string licenseImage, string vehicleType, string vehicleIN, string vehiclePlateNumber, string taxTokenNumber, string taxTokenImage, string profileImage, bool verified))",
+    params: [account?.address as string]
+  });
+
+  const { data: policeProfile } = useReadContract({
+    contract,
+    method: "function getPoliceProfile(address _policeAddress) view returns ((string firstName, string lastName, string dateOfBirth, string gender, string contactNumber, string residentialAddress, string emailAddress, string nid, string policeID, string designation, string profileImage))",
+    params: [account?.address as string]
+  });
+
+  const { data: companies } = useReadContract({
+    contract,
+    method: "function getApprovedRideSharingCompanies() view returns (address[])",
+    params: []
+  });
+
+  const isApprovedCompany = companies?.includes(account?.address as string);
+
+  useEffect(() => {
+    if (account?.address) {
+      // Start loading when useEffect is called
+      setIsLoading(true);
+
+      if (government && account.address === government) {
+        router.push(`/admin/${account.address}`);
+      } else if (driverProfile?.firstName) {
+        router.push(`/driverprofile/${account?.address}`);
+      } else if (policeProfile?.firstName) {
+        router.push(`/policeprofile/${account?.address}`);
+      } else if (isApprovedCompany) {
+        router.push(`/company/${account?.address}`);
+      }
+
+      // Stop loading after redirects are handled
+      setIsLoading(false);
+    }
+  }, [account, government, driverProfile, policeProfile, isApprovedCompany, router]);
+
+  const handleRegisterClick = () => {
+    if (account) {
+      setIsLoading(true);
+      router.push(`/register/${account?.address}`);
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="text-3xl font-semibold text-indigo-500">Loading...</div>
       </div>
-    </main>
-  );
-}
+    );
+  }
 
-function Header() {
   return (
-    <header className="flex flex-col items-center mb-20 md:mb-20">
-      <Image
-        src={thirdwebIcon}
-        alt=""
-        className="size-[150px] md:size-[150px]"
-        style={{
-          filter: "drop-shadow(0px 0px 24px #a726a9a8)",
-        }}
-      />
+    <section className="bg-white text-gray-600 body-font">
+      <div className="container mx-auto flex px-5 py-24 md:flex-row flex-col items-center">
+        <div className="lg:flex-grow md:w-1/2 lg:pr-24 md:pr-16 flex flex-col md:items-start md:text-left mb-16 md:mb-0 items-center text-center">
+          <h1 className="title-font sm:text-4xl text-3xl mb-4 font-medium text-gray-900">
+            Welcome to Secure Driving Records
+            <br className="hidden lg:inline-block"/>Your Trusted Web3 Solution
+          </h1>
+          <p className="mb-8 leading-relaxed">
+            Manage driver profiles and resolve traffic violation cases seamlessly. Police officers can file cases against drivers, while authorized ride-sharing companies can access verified driver records. <span className="font-bold">All interactions are secure and require MetaMask wallet connection for authentication.</span> 
+          </p>
+          <p className="text-sm text-gray-500 mb-8">
+            <strong>Note:</strong> If you're interested in applying as an authorized ride-sharing company, please contact <a href="mailto:tashfiqahmedemon1@gmail.com" className="text-indigo-500 underline">tashfiqahmedemon1@gmail.com</a>.
+          </p>
+          <div className="flex justify-center">
+            <button 
+              onClick={handleRegisterClick}
+              className={`inline-flex text-white bg-indigo-500 border-0 py-2 px-6 focus:outline-none rounded text-lg 
+                ${!account ? 'opacity-50 cursor-default' : 'hover:bg-indigo-600 cursor-pointer'}`}
+              disabled={!account}
+            >
+              Register
+            </button>
+          </div>
+        </div>
+        <div className="lg:max-w-lg lg:w-full md:w-1/2 w-5/6">
+          <img className="object-cover object-center rounded" alt="chain and lock image" src="/images/chain_lock.png" />
+        </div>
+      </div>
+    </section>
 
-      <h1 className="text-2xl md:text-6xl font-semibold md:font-bold tracking-tighter mb-6 text-zinc-100">
-        thirdweb SDK
-        <span className="text-zinc-300 inline-block mx-1"> + </span>
-        <span className="inline-block -skew-x-6 text-blue-500"> Next.js </span>
-      </h1>
-
-      <p className="text-zinc-300 text-base">
-        Read the{" "}
-        <code className="bg-zinc-800 text-zinc-300 px-2 rounded py-1 text-sm mx-1">
-          README.md
-        </code>{" "}
-        file to get started.
-      </p>
-    </header>
-  );
-}
-
-function ThirdwebResources() {
-  return (
-    <div className="grid gap-4 lg:grid-cols-3 justify-center">
-      <ArticleCard
-        title="thirdweb SDK Docs"
-        href="https://portal.thirdweb.com/typescript/v5"
-        description="thirdweb TypeScript SDK documentation"
-      />
-
-      <ArticleCard
-        title="Components and Hooks"
-        href="https://portal.thirdweb.com/typescript/v5/react"
-        description="Learn about the thirdweb React components and hooks in thirdweb SDK"
-      />
-
-      <ArticleCard
-        title="thirdweb Dashboard"
-        href="https://thirdweb.com/dashboard"
-        description="Deploy, configure, and manage your smart contracts from the dashboard."
-      />
-    </div>
-  );
-}
-
-function ArticleCard(props: {
-  title: string;
-  href: string;
-  description: string;
-}) {
-  return (
-    <a
-      href={props.href + "?utm_source=next-template"}
-      target="_blank"
-      className="flex flex-col border border-zinc-800 p-4 rounded-lg hover:bg-zinc-900 transition-colors hover:border-zinc-700"
-    >
-      <article>
-        <h2 className="text-lg font-semibold mb-2">{props.title}</h2>
-        <p className="text-sm text-zinc-400">{props.description}</p>
-      </article>
-    </a>
   );
 }
